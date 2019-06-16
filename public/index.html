@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<!-- Required meta tags -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<!-- Bootstrap CSS -->
+<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+
+<title>Socket.io</title>
+</head>
+<body>
+    <nav class="navbar navbar-fixed-top navbar-dark bg-inverse">
+        <a class="" href="#">Socket.io</a>
+    </nav>
+
+    <div class="container">
+        <div class="row">
+            <div class="col-sm-6">
+                <form id="username">
+                    <div class="form-group">
+                        <label>Username</label>
+                        <input class="form-control"/>
+                    </div>
+                </form>
+                <form id="room">
+                    <div class="form-group">
+                        <label>Room</label>
+                        <input class="form-control"/>
+                    </div>
+                </form>
+                <button id="leave">Leave the room</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-1.11.1.js"></script>
+    <script src='../node_modules/socket.io-client/dist/socket.io.js'></script>
+    <script src='js/client.js'></script>
+</body>
+</html>
