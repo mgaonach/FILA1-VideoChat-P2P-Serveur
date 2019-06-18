@@ -2,7 +2,9 @@ const sdp = {ip: "192.168.X.X"};
 var socket = io("http://localhost:2019/");
 
 socket.on('connection established', function() {
-    socket.emit('set sdp', sdp);
+    socket.emit('set sdp', sdp, (answer) => {
+        console.log();
+    });
 });
 
 /**

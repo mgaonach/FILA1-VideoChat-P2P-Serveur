@@ -15,65 +15,75 @@ io.on('connection', function(socket) {
     socket.join(socket.currentRoom);
     console.log(socket.username + ' entered the lobby');
     
-    socket.emit('connection established');
-    socket.on('set sdp', function(sdp) {
-        socket.sdp = {username: socket.username};
+    // On informe le client que la connexion est établie, et on lui donne son nom d'utilisateur par défaut
+    socket.emit('connection established', socket.username);
+
+    socket.on('set sdp', (sdp, respond) => {
+        if ( sdp == null ) {
+            respond({error: true});
+        } else {
+            socket.sdp = sdp;
+            respond({message: 'SDP updated'});
+        }
     });
 
-    socket.on('set username', function(newName) {
-        if ( newName === '' ) {
-            newName = 'Someone';
-        }
-
+    socket.on('set username', function(newName, respond) {
         const previousName = socket.username;
 
-        if ( newName !== previousName ) {
+        if ( newName == null || newName === '' ) {
+            respond({error: true});
+        } else if ( newName === previousName ) {
+            respond({error: true});
+        } else {
             socket.username = newName;
-            socket.sdp = {username: socket.username};
             socket.broadcast.to(socket.currentRoom).emit('username set', previousName, newName);
-        }
 
-        console.log(previousName + ' is now ' + newName);
+            console.log(previousName + ' is now ' + newName);
+        }
     });
 
-    socket.on('join room', function(newRoom) {
-        // Si le salon est vide, l'utilisateur quitte son salon
-        if ( newRoom === '' ) {
+    socket.on('leave room', (respond) => {
+        if ( socket.currentRoom !== '' ) {
             leaveRoom();
-        } 
-        // Sinon, et si le salon a changé, l'utilisateur est déplacé dans le nouveau salon
-        else if (newRoom !== socket.currentRoom) {
+        }
+    });
+
+    socket.on('join room', (newRoom, respond) => {
+        if (newRoom == null || newRoom === '') {
+            respond({error: true})
+        } else if (newRoom !== socket.currentRoom) {
             io.of('/').in(newRoom).clients((error, clients) => {
                 let usersCount = clients.length;
     
-                // @refactor Vérification asynchrone
                 if ( usersCount >= MAX_USERS_PER_ROOM ) {
                     socket.emit('room full');
+                    respond({error: true});
                 } else {
                     if ( usersCount !== 0 ) {
                         io.in(newRoom).clients((error, clients) => {
-                            if (error) throw error;
+                            if (error) respond({error: true});
 
                             clients.forEach((client) => {
                                 const peerSocket = io.of('/').connected[client];
                                 const peerSdp = peerSocket.sdp;
+                                const peerUsername = peerSocket.username;
     
-                                socket.emit('offer recieved', peerSdp);
+                                socket.emit('offer recieved', peerSdp, peerUsername);
                             });
 
                           });
                     }
                     joinRoom(newRoom);
-                    socket.broadcast.to(newRoom).emit('offer recieved', socket.sdp);
+                    socket.broadcast.to(newRoom).emit('offer recieved', socket.sdp, socket.username);
+
+                    respond({message: ''});
 
                     console.log(socket.username + ' joined the room "' + newRoom + '"');
                 }
             });
+        } else {
+            respond({error: true});
         }
-    });
-
-    socket.on('leave room', function() {
-        leaveRoom();
     });
 
     socket.on('send offer', function(sdp) {
@@ -103,7 +113,9 @@ io.on('connection', function(socket) {
      * Permet de rejoindre un salon
      */
     function joinRoom(newRoom){
-        leaveRoom();
+        if ( socket.currentRoom != null && socket.currentRoom !== '' ) {
+            leaveRoom();
+        }
         socket.join(newRoom);
         socket.currentRoom = newRoom;
     }
