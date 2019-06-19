@@ -37,7 +37,7 @@ io.on('connection', function(socket) {
         } else {
             socket.username = newName;
             socket.broadcast.to(socket.currentRoom).emit('username set', previousName, newName);
-
+            respond();
             console.log(previousName + ' is now ' + newName);
         }
     });
