@@ -1,53 +1,76 @@
 var app = require('express')();
 var http = require('http').createServer(app);
 var io = require('socket.io')(http);
-var p2p = require('socket.io-p2p-server').Server;
 
 var guestsCount = 1;
 const MAX_USERS_PER_ROOM = 2;
 
 
-io.on('connection', function(socket) {
-    socket.username = 'guest' + guestsCount++;
-    socket.currentRoom = '';
-    socket.sdp = null;
+    io.on('connection', function(socket) {
+        socket.username = 'guest' + guestsCount++;
+        socket.currentRoom = '';
+        socket.sdp = {};
 
-    socket.join(socket.currentRoom);
-    console.log(socket.username + ' entered the lobby');
-    
-    // On informe le client que la connexion est établie, et on lui donne son nom d'utilisateur par défaut
-    socket.emit('connection established', socket.username);
+        socket.join(socket.currentRoom);
+        console.log(socket.username + ' entered the lobby');
+        
+        // On informe le client que la connexion est établie, et on lui donne son nom d'utilisateur par défaut
+        socket.emit('connection established', socket.username);
 
-    socket.on('set sdp', (sdp, respond) => {
-        if ( sdp == null ) {
+        socket.on('set sdp', (sdp, respond) => {
+            if ( sdp == null ) {
+                respond({error: true});
+            } else {
+                socket.sdp = sdp;
+
+                io.of('/').in(socket.currentRoom).clients((error, clients) => {
+                    let usersCount = clients.length;
+        
+                    if ( usersCount !== 0 ) {
+                        io.in(socket.currentRoom).clients((error, clients) => {
+                            if (error) respond({error: true});
+
+                            clients.forEach((client) => {
+                                    const peerSocket = io.of('/').connected[client];
+
+                                    if ( socket !== peerSocket ) {
+                                        const peerSdp = peerSocket.sdp;
+                                        const peerUsername = peerSocket.username;
+            
+                                        socket.emit('offer received', peerSdp, peerUsername);
+                                    }
+                            });
+                        });
+                    }
+                    socket.broadcast.to(socket.currentRoom).emit('offer received', socket.sdp, socket.username);
+                });
+
+                respond({message: 'SDP updated'});
+                console.log(socket.username + " has now an SDP");
+            }
+    });
+
+    socket.on('send offer', (offer, respond) => {
+        if ( offer == null ) {
             respond({error: true});
         } else {
-            socket.sdp = sdp;
+            if ( io.of('/').in(socket.currentRoom).initiator === socket ) {
+                socket.broadcast.to(socket.currentRoom).emit('offer received', offer, socket.username);
+                respond({});
+                console.log(socket.username + " has sent an offer to " + socket.currentRoom);
+            } else {
+                respond({error: true});
+            }
+        }
+    });
 
-            io.of('/').in(socket.currentRoom).clients((error, clients) => {
-                let usersCount = clients.length;
-    
-                if ( usersCount !== 0 ) {
-                    io.in(socket.currentRoom).clients((error, clients) => {
-                        if (error) respond({error: true});
-
-                        clients.forEach((client) => {
-                                const peerSocket = io.of('/').connected[client];
-
-                                if ( socket !== peerSocket ) {
-                                    const peerSdp = peerSocket.sdp;
-                                    const peerUsername = peerSocket.username;
-        
-                                    socket.emit('offer received', peerSdp, peerUsername);
-                                }
-                        });
-                    });
-                }
-                socket.broadcast.to(socket.currentRoom).emit('offer received', socket.sdp, socket.username);
-            });
-
-            respond({message: 'SDP updated'});
-            console.log(socket.username + " has now an SDP");
+    socket.on('send answer', (answer, respond) => {
+        if ( answer == null ) {
+            respond({error: true});
+        } else {
+            socket.broadcast.to(socket.currentRoom).emit('answer received', answer, socket.username);
+            respond({});
+            console.log(socket.username + " has sent an answer to " + socket.currentRoom);
         }
     });
 
@@ -63,7 +86,7 @@ io.on('connection', function(socket) {
             if ( socket.currentRoom != null && socket.currentRoom !== '') {
                 socket.broadcast.to(socket.currentRoom).emit('username set', previousName, newName);
             }
-            respond();
+            respond({});
             console.log(previousName + ' is now ' + newName);
         }
     });
@@ -85,23 +108,22 @@ io.on('connection', function(socket) {
                     socket.emit('room full');
                     respond({error: true});
                 } else {
+                    let initiator = false;
+                    if ( usersCount > 0 ) {
+                        io.of('/').in(newRoom).initiator = socket;
+                        initiator = true;
+                    }
+
                     joinRoom(newRoom);
 
-                    respond({message: ''});
+
+                    respond({initiator: initiator});
 
                     console.log(socket.username + ' joined the room "' + newRoom + '"');
                 }
             });
         } else {
             respond({error: true});
-        }
-    });
-
-    socket.on('send offer', function(sdp) {
-        if ( sdp != null ) {
-            socket.broadcast.to(socket.currentRoom).emit('offer received', sdp);
-
-            console.log(socket.username + ' has sent an offer to the room "' + socket.currentRoom + '"');
         }
     });
 
